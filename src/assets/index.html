@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tambok Cycles — Bike Shop</title>
+
+<!-- Bootstrap -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- React + Babel (CDN, no build step) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+
+<style>
+  :root{
+    --tc-forest:#1f3329;
+    --tc-forest-dark:#152019;
+    --tc-rust:#c1561e;
+    --tc-rust-dark:#a3450f;
+    --tc-cream:#f3ede2;
+    --tc-steel:#46594f;
+    --tc-line:#d8cfbd;
+  }
+  body{
+    font-family:'Inter',sans-serif;
+    background:var(--tc-cream);
+    color:#22281f;
+  }
+  h1,h2,h3,h4,h5,.brand-font{
+    font-family:'Oswald',sans-serif;
+    letter-spacing:.02em;
+    text-transform:uppercase;
+  }
+  .navbar-tc{
+    background:var(--tc-forest);
+  }
+  .navbar-tc .navbar-brand{
+    font-family:'Oswald',sans-serif;
+    font-weight:700;
+    letter-spacing:.06em;
+    color:var(--tc-cream)!important;
+  }
+  .navbar-tc .navbar-brand i{ color:var(--tc-rust); }
+  .navbar-tc .nav-link{
+    color:#cfd8cf!important;
+    font-weight:500;
+    font-size:.92rem;
+    letter-spacing:.03em;
+  }
+  .navbar-tc .nav-link.active, .navbar-tc .nav-link:hover{ color:#fff!important; }
+  .btn-rust{
+    background:var(--tc-rust); border-color:var(--tc-rust); color:#fff;
+    font-family:'Oswald',sans-serif; letter-spacing:.04em; text-transform:uppercase; font-size:.85rem;
+  }
+  .btn-rust:hover{ background:var(--tc-rust-dark); border-color:var(--tc-rust-dark); color:#fff; }
+  .btn-outline-forest{
+    border:1px solid var(--tc-forest); color:var(--tc-forest); background:transparent;
+  }
+  .btn-outline-forest:hover{ background:var(--tc-forest); color:#fff; }
+  .hero{
+    background:linear-gradient(135deg,var(--tc-forest) 0%, var(--tc-forest-dark) 100%);
+    color:var(--tc-cream);
+    padding:64px 0;
+    border-bottom:4px solid var(--tc-rust);
+  }
+  .hero .eyebrow{
+    color:var(--tc-rust); letter-spacing:.18em; font-size:.75rem; font-weight:600;
+  }
+  .card-tc{
+    border:1px solid var(--tc-line);
+    background:#fff;
+    border-radius:6px;
+    transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .card-tc:hover{ transform:translateY(-3px); box-shadow:0 10px 24px rgba(31,51,41,.12); }
+  .product-img{
+    height:170px; display:flex; align-items:center; justify-content:center;
+    background:var(--tc-line); font-size:3rem; color:var(--tc-steel);
+    border-radius:6px 6px 0 0;
+  }
+  .price-tag{ color:var(--tc-rust); font-weight:700; font-family:'Oswald',sans-serif; }
+  .badge-stock{ font-size:.7rem; }
+  .section-title{
+    border-left:5px solid var(--tc-rust); padding-left:12px; margin-bottom:1.25rem;
+  }
+  .auth-card{
+    max-width:430px; margin:60px auto; border-top:4px solid var(--tc-rust);
+  }
+  .table-tc thead{ background:var(--tc-forest); color:#fff; }
+  .footer-tc{
+    background:var(--tc-forest-dark); color:#b9c2b6; padding:24px 0; margin-top:60px; font-size:.85rem;
+  }
+  .cart-icon-wrap{ position:relative; }
+  .cart-count{
+    position:absolute; top:-6px; right:-10px; background:var(--tc-rust); color:#fff;
+    border-radius:50%; font-size:.65rem; padding:1px 6px; font-weight:700;
+  }
+  .status-pill{ font-family:'Oswald',sans-serif; letter-spacing:.03em; font-size:.72rem; }
+  .empty-state{ padding:60px 20px; text-align:center; color:var(--tc-steel); }
+  .form-control:focus, .form-select:focus{
+    border-color:var(--tc-rust); box-shadow:0 0 0 .2rem rgba(193,86,30,.15);
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useMemo } = React;
+
+/* ---------------- Storage helpers ---------------- */
+const LS = {
+  get(key, fallback){
+    try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+    catch(e){ return fallback; }
+  },
+  set(key, value){ localStorage.setItem(key, JSON.stringify(value)); }
+};
+
+const uid = (prefix) => prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+
+/* ---------------- Seed data ---------------- */
+function seedIfEmpty(){
+  if(!LS.get('tc_users')){
+    LS.set('tc_users', [
+      { id:'u_admin', name:'Shop Admin', email:'admin@tambokcycles.com', password:'admin123', role:'admin', phone:'0917-000-0000', address:'Tambok Cycles HQ, Bulacan' }
+    ]);
+  }
+  if(!LS.get('tc_products')){
+    LS.set('tc_products', [
+      { id: uid('p'), name:'Trail Blazer MTB 27.5"', category:'Mountain Bike', price:18500, stock:8, icon:'fa-mountain', description:'Aluminum frame hardtail, 21-speed, hydraulic disc brakes — built for rocky trails.' },
+      { id: uid('p'), name:'Urban Glide City Bike', category:'City Bike', price:9200, stock:14, icon:'fa-city', description:'Lightweight commuter bike with fenders and rear rack, perfect for daily rides.' },
+      { id: uid('p'), name:'Velocity Pro Road Bike', category:'Road Bike', price:32500, stock:5, icon:'fa-route', description:'Carbon fork, drop handlebars, 16-speed — built for speed on pavement.' },
+      { id: uid('p'), name:'Kiddo Cruiser 16"', category:'Kids Bike', price:4500, stock:20, icon:'fa-child-reaching', description:'Training-wheel ready, colorful frame, safety-rated for ages 4-7.' },
+      { id: uid('p'), name:'Pro Cycling Helmet', category:'Accessories', price:1800, stock:30, icon:'fa-hard-hat', description:'Adjustable fit, ventilated shell, CPSC certified for safety.' },
+      { id: uid('p'), name:'LED Bike Light Set', category:'Accessories', price:650, stock:40, icon:'fa-lightbulb', description:'Front & rear rechargeable LED lights for night riding visibility.' }
+    ]);
+  }
+  if(!LS.get('tc_orders')) LS.set('tc_orders', []);
+}
+seedIfEmpty();
+
+/* ---------------- Small UI bits ---------------- */
+function Toast({ msg, type, onClose }){
+  useEffect(()=>{ const t = setTimeout(onClose, 2600); return ()=>clearTimeout(t); },[]);
+  if(!msg) return null;
+  return (
+    <div className={`alert alert-${type||'success'} position-fixed shadow`} style={{top:80,right:20,zIndex:2000,minWidth:260}}>
+      {msg}
+    </div>
+  );
+}
+
+function Money({ v }){ return <span>₱{Number(v).toLocaleString('en-PH', {minimumFractionDigits:2})}</span>; }
+
+/* ---------------- Navbar ---------------- */
+function Navbar({ page, setPage, user, logout, cartCount }){
+  const NavBtn = ({ id, label, icon }) => (
+    <button className={`nav-link btn btn-link ${page===id?'active':''}`} onClick={()=>setPage(id)}>
+      <i className={`fa-solid ${icon} me-1`}></i>{label}
+    </button>
+  );
+  return (
+    <nav className="navbar navbar-expand-lg navbar-tc sticky-top">
+      <div className="container">
+        <button className="navbar-brand btn btn-link text-decoration-none" onClick={()=>setPage('home')}>
+          <i className="fa-solid fa-person-biking me-2"></i>Tambok Cycles
+        </button>
+        <div className="d-flex flex-wrap align-items-center gap-1">
+          <NavBtn id="home" label="Shop" icon="fa-store" />
+          {user && <NavBtn id="orders" label="My Orders" icon="fa-receipt" />}
+          {user && user.role==='admin' && <NavBtn id="admin-products" label="Products" icon="fa-screwdriver-wrench" />}
+          {user && user.role==='admin' && <NavBtn id="admin-customers" label="Customers" icon="fa-users" />}
+          {user && user.role==='admin' && <NavBtn id="admin-orders" label="All Orders" icon="fa-clipboard-list" />}
+          {user &&
+            <button className="nav-link btn btn-link cart-icon-wrap" onClick={()=>setPage('cart')}>
+              <i className="fa-solid fa-cart-shopping"></i>
+              {cartCount>0 && <span className="cart-count">{cartCount}</span>}
+            </button>
+          }
+          {!user ? (
+            <>
+              <button className="btn btn-outline-light btn-sm ms-2" onClick={()=>setPage('login')}>Log In</button>
+              <button className="btn btn-rust btn-sm" onClick={()=>setPage('register')}>Sign Up</button>
+            </>
+          ) : (
+            <div className="dropdown ms-2">
+              <button className="btn btn-outline-light btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                <i className="fa-solid fa-user me-1"></i>{user.name.split(' ')[0]}
+              </button>
+              <ul className="dropdown-menu dropdown-menu-end">
+                <li><button className="dropdown-item" onClick={()=>setPage('profile')}>My Profile</button></li>
+                <li><hr className="dropdown-divider"/></li>
+                <li><button className="dropdown-item text-danger" onClick={logout}>Log Out</button></li>
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+/* ---------------- Auth Pages ---------------- */
+function LoginPage({ setPage, onLogin, notify }){
+  const [email,setEmail] = useState(''); const [password,setPassword] = useState('');
+  const submit = (e) => {
+    e.preventDefault();
+    const users = LS.get('tc_users', []);
+    const found = users.find(u=>u.email.toLowerCase()===email.toLowerCase() && u.password===password);
+    if(!found){ notify('Invalid email or password.','danger'); return; }
+    onLogin(found);
+  };
+  return (
+    <div className="container">
+      <div className="card card-tc auth-card p-4">
+        <h3 className="text-center mb-1"><i className="fa-solid fa-lock me-2"></i>Log In</h3>
+        <p className="text-center text-muted small mb-4">Welcome back to Tambok Cycles</p>
+        <form onSubmit={submit}>
+          <div className="mb-3">
+            <label className="form-label small fw-semibold">Email</label>
+            <input type="email" className="form-control" required value={email} onChange={e=>setEmail(e.target.value)} />
+          </div>
+          <div className="mb-3">
+            <label className="form-label small fw-semibold">Password</label>
+            <input type="password" className="form-control" required value={password} onChange={e=>setPassword(e.target.value)} />
+          </div>
+          <button className="btn btn-rust w-100 py-2" type="submit">Log In</button>
+        </form>
+        <div className="text-center mt-3 small">
+          No account? <button className="btn btn-link p-0" onClick={()=>setPage('register')}>Create one</button>
+        </div>
+        <div className="text-center mt-2 small text-muted">Admin demo: admin@tambokcycles.com / admin123</div>
+      </div>
+    </div>
+  );
+}
+
+function RegisterPage({ setPage, onLogin, notify }){
+  const [form,setForm] = useState({ name:'', email:'', password:'', phone:'', address:'' });
+  const upd = (k,v) => setForm({...form,[k]:v});
+  const submit = (e) => {
+    e.preventDefault();
+    const users = LS.get('tc_users', []);
+    if(users.some(u=>u.email.toLowerCase()===form.email.toLowerCase())){
+      notify('An account with that email already exists.','danger'); return;
+    }
+    const newUser = { id: uid('u'), role:'customer', ...form };
+    LS.set('tc_users', [...users, newUser]);
+    notify('Account created! Welcome to Tambok Cycles.','success');
+    onLogin(newUser);
+  };
+  return (
+    <div className="container">
+      <div className="card card-tc auth-card p-4">
+        <h3 className="text-center mb-1"><i className="fa-solid fa-user-plus me-2"></i>Create Account</h3>
+        <p className="text-center text-muted small mb-4">Join Tambok Cycles today</p>
+        <form onSubmit={submit}>
+          <div className="mb-2">
+            <label className="form-label small fw-semibold">Full Name</label>
+            <input className="form-control" required value={form.name} onChange={e=>upd('name',e.target.value)} />
+          </div>
+          <div className="mb-2">
+            <label className="form-label small fw-semibold">Email</label>
+            <input type="email" className="form-control" required value={form.email} onChange={e=>upd('email',e.target.value)} />
+          </div>
+          <div className="mb-2">
+            <label className="form-label small fw-semibold">Password</label>
+            <input type="password" className="form-control" required minLength={4} value={form.password} onChange={e=>upd('password',e.target.value)} />
+          </div>
+          <div className="mb-2">
+            <label className="form-label small fw-semibold">Phone</label>
+            <input className="form-control" value={form.phone} onChange={e=>upd('phone',e.target.value)} />
+          </div>
+          <div className="mb-3">
+            <label className="form-label small fw-semibold">Address</label>
+            <input className="form-control" value={form.address} onChange={e=>upd('address',e.target.value)} />
+          </div>
+          <button className="btn btn-rust w-100 py-2" type="submit">Sign Up</button>
+        </form>
+        <div className="text-center mt-3 small">
+          Already have an account? <button className="btn btn-link p-0" onClick={()=>setPage('login')}>Log in</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProfilePage({ user, setUser, notify }){
+  const [form,setForm] = useState({...user});
+  const save = (e) => {
+    e.preventDefault();
+    const users = LS.get('tc_users', []).map(u=>u.id===user.id?{...u,...form}:u);
+    LS.set('tc_users', users);
+    setUser(form);
+    notify('Profile updated.','success');
+  };
+  return (
+    <div className="container">
+      <div className="card card-tc auth-card p-4">
+        <h3 className="text-center mb-4"><i className="fa-solid fa-id-card me-2"></i>My Profile</h3>
+        <form onSubmit={save}>
+          <div className="mb-2"><label className="form-label small fw-semibold">Full Name</label>
+            <input className="form-control" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} /></div>
+          <div className="mb-2"><label className="form-label small fw-semibold">Email</label>
+            <input className="form-control" value={form.email} disabled /></div>
+          <div className="mb-2"><label className="form-label small fw-semibold">Phone</label>
+            <input className="form-control" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})} /></div>
+          <div className="mb-3"><label className="form-label small fw-semibold">Address</label>
+            <input className="form-control" value={form.address||''} onChange={e=>setForm({...form,address:e.target.value})} /></div>
+          <button className="btn btn-rust w-100 py-2" type="submit">Save Changes</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Shop / Products ---------------- */
+function ShopPage({ products, addToCart, notify }){
+  const [search,setSearch] = useState('');
+  const [cat,setCat] = useState('All');
+  const categories = useMemo(()=>['All', ...new Set(products.map(p=>p.category))], [products]);
+  const filtered = products.filter(p =>
+    (cat==='All'||p.category===cat) &&
+    p.name.toLowerCase().includes(search.toLowerCase())
+  );
+  return (
+    <>
+      <div className="hero">
+        <div className="container">
+          <div className="eyebrow">TAMBOK CYCLES &middot; EST. 2026</div>
+          <h1 className="display-5 fw-bold mb-2">Gear Up. Ride Out.</h1>
+          <p className="mb-0" style={{maxWidth:520, opacity:.85}}>Mountain, road, city and kids' bikes plus the accessories to keep you rolling — all in one shop.</p>
+        </div>
+      </div>
+      <div className="container py-4">
+        <div className="row g-2 mb-4">
+          <div className="col-md-7">
+            <input className="form-control" placeholder="Search bikes & gear..." value={search} onChange={e=>setSearch(e.target.value)} />
+          </div>
+          <div className="col-md-5">
+            <select className="form-select" value={cat} onChange={e=>setCat(e.target.value)}>
+              {categories.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {filtered.length===0 && <div className="empty-state"><i className="fa-solid fa-box-open fa-2x mb-2"></i><div>No products match your search.</div></div>}
+
+        <div className="row g-4">
+          {filtered.map(p=>(
+            <div className="col-sm-6 col-lg-4" key={p.id}>
+              <div className="card card-tc h-100">
+                <div className="product-img"><i className={`fa-solid ${p.icon||'fa-bicycle'}`}></i></div>
+                <div className="card-body d-flex flex-column">
+                  <div className="d-flex justify-content-between align-items-start">
+                    <h6 className="fw-bold mb-1">{p.name}</h6>
+                    <span className={`badge ${p.stock>0?'bg-success':'bg-secondary'} badge-stock`}>{p.stock>0?p.stock+' in stock':'Out of stock'}</span>
+                  </div>
+                  <div className="text-muted small mb-2">{p.category}</div>
+                  <p className="small text-muted flex-grow-1">{p.description}</p>
+                  <div className="d-flex justify-content-between align-items-center mt-2">
+                    <span className="price-tag fs-5"><Money v={p.price} /></span>
+                    <button className="btn btn-rust btn-sm" disabled={p.stock<=0} onClick={()=>addToCart(p)}>
+                      <i className="fa-solid fa-cart-plus me-1"></i>Add
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ---------------- Cart ---------------- */
+function CartPage({ cart, updateQty, removeItem, checkout, setPage }){
+  const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
+  if(cart.length===0){
+    return (
+      <div className="container">
+        <div className="empty-state">
+          <i className="fa-solid fa-cart-shopping fa-3x mb-3"></i>
+          <h5>Your cart is empty</h5>
+          <button className="btn btn-rust mt-2" onClick={()=>setPage('home')}>Browse Products</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="container py-4">
+      <h3 className="section-title">Your Cart</h3>
+      <div className="table-responsive">
+        <table className="table align-middle table-tc">
+          <thead><tr><th>Product</th><th>Price</th><th>Qty</th><th>Subtotal</th><th></th></tr></thead>
+          <tbody>
+            {cart.map(item=>(
+              <tr key={item.id}>
+                <td className="fw-semibold">{item.name}</td>
+                <td><Money v={item.price} /></td>
+                <td style={{width:130}}>
+                  <input type="number" min="1" max={item.maxStock} className="form-control form-control-sm"
+                    value={item.qty} onChange={e=>updateQty(item.id, Math.max(1, Math.min(item.maxStock, +e.target.value||1)))} />
+                </td>
+                <td><Money v={item.price*item.qty} /></td>
+                <td><button className="btn btn-sm btn-outline-danger" onClick={()=>removeItem(item.id)}><i className="fa-solid fa-trash"></i></button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="d-flex justify-content-end">
+        <div className="card card-tc p-3" style={{minWidth:280}}>
+          <div className="d-flex justify-content-between mb-2"><span>Total</span><span className="price-tag fs-5"><Money v={total} /></span></div>
+          <button className="btn btn-rust w-100" onClick={checkout}><i className="fa-solid fa-bag-shopping me-1"></i>Checkout</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Orders ---------------- */
+function StatusBadge({ status }){
+  const map = { Pending:'bg-warning text-dark', Processing:'bg-info text-dark', Shipped:'bg-primary', Completed:'bg-success', Cancelled:'bg-danger' };
+  return <span className={`badge status-pill ${map[status]||'bg-secondary'}`}>{status}</span>;
+}
+
+function OrdersPage({ orders, user, isAdmin, updateStatus, cancelOrder }){
+  const list = isAdmin ? orders : orders.filter(o=>o.customerId===user.id);
+  return (
+    <div className="container py-4">
+      <h3 className="section-title">{isAdmin?'All Orders':'My Orders'}</h3>
+      {list.length===0 && <div className="empty-state"><i className="fa-solid fa-receipt fa-2x mb-2"></i><div>No orders yet.</div></div>}
+      {list.slice().reverse().map(o=>(
+        <div className="card card-tc mb-3 p-3" key={o.id}>
+          <div className="d-flex justify-content-between flex-wrap gap-2">
+            <div>
+              <div className="fw-bold">Order #{o.id.slice(-6).toUpperCase()}</div>
+              <div className="small text-muted">{new Date(o.date).toLocaleString()}</div>
+              {isAdmin && <div className="small text-muted">Customer: {o.customerName}</div>}
+            </div>
+            <div className="text-end">
+              <StatusBadge status={o.status} />
+              <div className="price-tag mt-1">Total: <Money v={o.total} /></div>
+            </div>
+          </div>
+          <ul className="list-unstyled small mt-2 mb-2">
+            {o.items.map(it=><li key={it.id}>{it.name} × {it.qty} — <Money v={it.price*it.qty} /></li>)}
+          </ul>
+          <div className="d-flex gap-2 flex-wrap">
+            {isAdmin && o.status!=='Completed' && o.status!=='Cancelled' && (
+              <>
+                {['Pending','Processing','Shipped','Completed'].map(s=>(
+                  <button key={s} className={`btn btn-sm ${o.status===s?'btn-rust':'btn-outline-forest'}`} onClick={()=>updateStatus(o.id,s)}>{s}</button>
+                ))}
+              </>
+            )}
+            {(o.status==='Pending') && (
+              <button className="btn btn-sm btn-outline-danger" onClick={()=>cancelOrder(o.id)}>Cancel Order</button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ---------------- Admin: Products CRUD ---------------- */
+function ProductForm({ initial, onSave, onCancel }){
+  const blank = { name:'', category:'Mountain Bike', price:'', stock:'', icon:'fa-bicycle', description:'' };
+  const [form,setForm] = useState(initial || blank);
+  const upd = (k,v)=>setForm({...form,[k]:v});
+  const submit = (e)=>{ e.preventDefault(); onSave({...form, price:+form.price, stock:+form.stock}); };
+  return (
+    <form onSubmit={submit} className="card card-tc p-3 mb-4">
+      <h6 className="fw-bold mb-3">{initial? 'Edit Product':'Add New Product'}</h6>
+      <div className="row g-2">
+        <div className="col-md-6">
+          <label className="form-label small">Name</label>
+          <input className="form-control" required value={form.name} onChange={e=>upd('name',e.target.value)} />
+        </div>
+        <div className="col-md-6">
+          <label className="form-label small">Category</label>
+          <select className="form-select" value={form.category} onChange={e=>upd('category',e.target.value)}>
+            {['Mountain Bike','Road Bike','City Bike','Kids Bike','Accessories'].map(c=><option key={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="col-md-4">
+          <label className="form-label small">Price (₱)</label>
+          <input type="number" min="0" className="form-control" required value={form.price} onChange={e=>upd('price',e.target.value)} />
+        </div>
+        <div className="col-md-4">
+          <label className="form-label small">Stock</label>
+          <input type="number" min="0" className="form-control" required value={form.stock} onChange={e=>upd('stock',e.target.value)} />
+        </div>
+        <div className="col-md-4">
+          <label className="form-label small">Icon (FontAwesome)</label>
+          <input className="form-control" value={form.icon} onChange={e=>upd('icon',e.target.value)} placeholder="fa-bicycle" />
+        </div>
+        <div className="col-12">
+          <label className="form-label small">Description</label>
+          <textarea className="form-control" rows="2" value={form.description} onChange={e=>upd('description',e.target.value)}></textarea>
+        </div>
+      </div>
+      <div className="mt-3 d-flex gap-2">
+        <button className="btn btn-rust" type="submit"><i className="fa-solid fa-floppy-disk me-1"></i>Save</button>
+        {onCancel && <button type="button" className="btn btn-outline-secondary" onClick={onCancel}>Cancel</button>}
+      </div>
+    </form>
+  );
+}
+
+function AdminProductsPage({ products, saveProduct, deleteProduct }){
+  const [editing,setEditing] = useState(null);
+  const [showForm,setShowForm] = useState(false);
+  return (
+    <div className="container py-4">
+      <div className="d-flex justify-content-between align-items-center section-title">
+        <h3 className="mb-0">Manage Products</h3>
+        <button className="btn btn-rust btn-sm" onClick={()=>{setEditing(null); setShowForm(true);}}>
+          <i className="fa-solid fa-plus me-1"></i>Add Product
+        </button>
+      </div>
+      {showForm && (
+        <ProductForm
+          initial={editing}
+          onSave={(p)=>{ saveProduct(editing? {...p,id:editing.id} : {...p,id:uid('p')}); setShowForm(false); setEditing(null); }}
+          onCancel={()=>{setShowForm(false); setEditing(null);}}
+        />
+      )}
+      <div className="table-responsive">
+        <table className="table table-tc align-middle">
+          <thead><tr><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th></th></tr></thead>
+          <tbody>
+            {products.map(p=>(
+              <tr key={p.id}>
+                <td><i className={`fa-solid ${p.icon} me-2 text-muted`}></i>{p.name}</td>
+                <td>{p.category}</td>
+                <td><Money v={p.price} /></td>
+                <td>{p.stock}</td>
+                <td className="text-end">
+                  <button className="btn btn-sm btn-outline-forest me-1" onClick={()=>{setEditing(p); setShowForm(true);}}><i className="fa-solid fa-pen"></i></button>
+                  <button className="btn btn-sm btn-outline-danger" onClick={()=>{ if(confirm('Delete this product?')) deleteProduct(p.id); }}><i className="fa-solid fa-trash"></i></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Admin: Customers CRUD ---------------- */
+function CustomerForm({ initial, onSave, onCancel }){
+  const [form,setForm] = useState(initial);
+  const upd=(k,v)=>setForm({...form,[k]:v});
+  return (
+    <form className="card card-tc p-3 mb-4" onSubmit={e=>{e.preventDefault(); onSave(form);}}>
+      <h6 className="fw-bold mb-3">Edit Customer</h6>
+      <div className="row g-2">
+        <div className="col-md-6"><label className="form-label small">Name</label>
+          <input className="form-control" required value={form.name} onChange={e=>upd('name',e.target.value)} /></div>
+        <div className="col-md-6"><label className="form-label small">Email</label>
+          <input className="form-control" value={form.email} disabled /></div>
+        <div className="col-md-6"><label className="form-label small">Phone</label>
+          <input className="form-control" value={form.phone||''} onChange={e=>upd('phone',e.target.value)} /></div>
+        <div className="col-md-6"><label className="form-label small">Address</label>
+          <input className="form-control" value={form.address||''} onChange={e=>upd('address',e.target.value)} /></div>
+      </div>
+      <div className="mt-3 d-flex gap-2">
+        <button className="btn btn-rust" type="submit">Save</button>
+        <button type="button" className="btn btn-outline-secondary" onClick={onCancel}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
+function AdminCustomersPage({ users, saveUser, deleteUser }){
+  const customers = users.filter(u=>u.role==='customer');
+  const [editing,setEditing] = useState(null);
+  return (
+    <div className="container py-4">
+      <h3 className="section-title">Manage Customers</h3>
+      {editing && <CustomerForm initial={editing} onSave={(u)=>{saveUser(u); setEditing(null);}} onCancel={()=>setEditing(null)} />}
+      {customers.length===0 && <div className="empty-state"><i className="fa-solid fa-users fa-2x mb-2"></i><div>No registered customers yet.</div></div>}
+      <div className="table-responsive">
+        <table className="table table-tc align-middle">
+          <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Address</th><th></th></tr></thead>
+          <tbody>
+            {customers.map(c=>(
+              <tr key={c.id}>
+                <td>{c.name}</td><td>{c.email}</td><td>{c.phone||'—'}</td><td>{c.address||'—'}</td>
+                <td className="text-end">
+                  <button className="btn btn-sm btn-outline-forest me-1" onClick={()=>setEditing(c)}><i className="fa-solid fa-pen"></i></button>
+                  <button className="btn btn-sm btn-outline-danger" onClick={()=>{ if(confirm('Delete this customer? This also removes their order history.')) deleteUser(c.id); }}><i className="fa-solid fa-trash"></i></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- App ---------------- */
+function App(){
+  const [page,setPage] = useState('home');
+  const [user,setUser] = useState(()=>LS.get('tc_session', null));
+  const [products,setProducts] = useState(()=>LS.get('tc_products', []));
+  const [users,setUsers] = useState(()=>LS.get('tc_users', []));
+  const [orders,setOrders] = useState(()=>LS.get('tc_orders', []));
+  const [cart,setCart] = useState(()=> user ? LS.get('tc_cart_'+user.id, []) : []);
+  const [toast,setToast] = useState(null);
+
+  const notify = (msg, type='success') => setToast({msg,type,k:Date.now()});
+
+  useEffect(()=>{ LS.set('tc_products', products); },[products]);
+  useEffect(()=>{ LS.set('tc_users', users); },[users]);
+  useEffect(()=>{ LS.set('tc_orders', orders); },[orders]);
+  useEffect(()=>{ if(user) LS.set('tc_cart_'+user.id, cart); },[cart,user]);
+
+  const handleLogin = (u) => {
+    setUser(u); LS.set('tc_session', u);
+    setCart(LS.get('tc_cart_'+u.id, []));
+    setPage('home');
+    notify(`Welcome, ${u.name.split(' ')[0]}!`);
+  };
+  const logout = () => { setUser(null); LS.set('tc_session', null); setCart([]); setPage('home'); };
+  const updateUser = (u) => { setUser(u); LS.set('tc_session', u); setUsers(prev=>prev.map(x=>x.id===u.id?u:x)); };
+
+  const addToCart = (p) => {
+    if(!user){ notify('Please log in to add items to cart.','warning'); setPage('login'); return; }
+    setCart(prev=>{
+      const ex = prev.find(i=>i.id===p.id);
+      if(ex) return prev.map(i=>i.id===p.id? {...i, qty: Math.min(i.qty+1, p.stock)} : i);
+      return [...prev, { id:p.id, name:p.name, price:p.price, qty:1, maxStock:p.stock }];
+    });
+    notify(`${p.name} added to cart.`);
+  };
+  const updateQty = (id, qty) => setCart(prev=>prev.map(i=>i.id===id?{...i,qty}:i));
+  const removeItem = (id) => setCart(prev=>prev.filter(i=>i.id!==id));
+
+  const checkout = () => {
+    if(cart.length===0) return;
+    const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
+    const order = { id: uid('o'), customerId:user.id, customerName:user.name, items:cart, total, status:'Pending', date:new Date().toISOString() };
+    setOrders(prev=>[...prev, order]);
+    setProducts(prev=>prev.map(p=>{
+      const item = cart.find(c=>c.id===p.id);
+      return item ? {...p, stock: Math.max(0, p.stock-item.qty)} : p;
+    }));
+    setCart([]);
+    notify('Order placed successfully!');
+    setPage('orders');
+  };
+
+  const updateStatus = (id, status) => setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));
+  const cancelOrder = (id) => setOrders(prev=>prev.map(o=>o.id===id?{...o,status:'Cancelled'}:o));
+
+  const saveProduct = (p) => {
+    setProducts(prev=>{
+      const exists = prev.some(x=>x.id===p.id);
+      return exists ? prev.map(x=>x.id===p.id?p:x) : [...prev, p];
+    });
+    notify('Product saved.');
+  };
+  const deleteProduct = (id) => { setProducts(prev=>prev.filter(p=>p.id!==id)); notify('Product deleted.','warning'); };
+
+  const saveUserAdmin = (u) => { setUsers(prev=>prev.map(x=>x.id===u.id?u:x)); notify('Customer updated.'); };
+  const deleteUserAdmin = (id) => {
+    setUsers(prev=>prev.filter(u=>u.id!==id));
+    setOrders(prev=>prev.filter(o=>o.customerId!==id));
+    notify('Customer deleted.','warning');
+  };
+
+  const cartCount = cart.reduce((s,i)=>s+i.qty,0);
+  const isAdmin = user && user.role==='admin';
+
+  // route guard
+  let view = page;
+  if((view==='admin-products'||view==='admin-customers'||view==='admin-orders') && !isAdmin) view='home';
+  if((view==='cart'||view==='orders'||view==='profile') && !user) view='login';
+
+  return (
+    <div className="d-flex flex-column min-vh-100">
+      <Navbar page={view} setPage={setPage} user={user} logout={logout} cartCount={cartCount} />
+      <Toast msg={toast?.msg} type={toast?.type} onClose={()=>setToast(null)} key={toast?.k} />
+      <div className="flex-grow-1">
+        {view==='home' && <ShopPage products={products} addToCart={addToCart} notify={notify} />}
+        {view==='login' && <LoginPage setPage={setPage} onLogin={handleLogin} notify={notify} />}
+        {view==='register' && <RegisterPage setPage={setPage} onLogin={handleLogin} notify={notify} />}
+        {view==='profile' && user && <ProfilePage user={user} setUser={updateUser} notify={notify} />}
+        {view==='cart' && user && <CartPage cart={cart} updateQty={updateQty} removeItem={removeItem} checkout={checkout} setPage={setPage} />}
+        {view==='orders' && user && <OrdersPage orders={orders} user={user} isAdmin={false} updateStatus={updateStatus} cancelOrder={cancelOrder} />}
+        {view==='admin-orders' && isAdmin && <OrdersPage orders={orders} user={user} isAdmin={true} updateStatus={updateStatus} cancelOrder={cancelOrder} />}
+        {view==='admin-products' && isAdmin && <AdminProductsPage products={products} saveProduct={saveProduct} deleteProduct={deleteProduct} />}
+        {view==='admin-customers' && isAdmin && <AdminCustomersPage users={users} saveUser={saveUserAdmin} deleteUser={deleteUserAdmin} />}
+      </div>
+      <footer className="footer-tc text-center">
+        <div className="container">
+          <i className="fa-solid fa-person-biking me-2"></i>Tambok Cycles &copy; 2026 — College Capstone Project (React + Bootstrap)
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
